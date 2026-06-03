@@ -15,7 +15,7 @@ type MovieMark struct {
 	IsAList      bool      `json:"isAList"`
 }
 
-func Handler(w http.ResponseWriter, r *http.Request) {
+func MarkHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

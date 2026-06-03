@@ -12,7 +12,7 @@ type Settings struct {
 	MonthlyCost float64 `json:"monthlyCost"`
 }
 
-func Handler(w http.ResponseWriter, r *http.Request) {
+func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 	if err := shared.InitDB(); err != nil {
 		http.Error(w, "Database initialization failed", http.StatusInternalServerError)
 		return
