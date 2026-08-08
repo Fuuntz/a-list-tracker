@@ -14,8 +14,9 @@ func TestEmbeddedFrontend(t *testing.T) {
 		contains    string
 	}{
 		{path: "/", contentType: "text/html", contains: "<title>A-List Tracker</title>"},
+		{path: "/setup", contentType: "text/html", contains: "Create your password"},
 		{path: "/app.js", contentType: "text/javascript", contains: "DOMContentLoaded"},
-		{path: "/style.css", contentType: "text/css", contains: "--bg-color"},
+		{path: "/style.css", contentType: "text/css", contains: "--bg:"},
 	}
 
 	handler := newHandler()

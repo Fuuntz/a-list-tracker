@@ -1,52 +1,59 @@
 package api
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/fuuntz/a-list-tracker/shared"
 )
 
 type MovieMark struct {
-	LetterboxdID string    `json:"id"`
-	Title        string    `json:"title"`
-	WatchedDate  time.Time `json:"watchedDate"`
-	IsAList      bool      `json:"isAList"`
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
 }
 
 func MarkHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Method not allowed"})
 		return
 	}
-
 	if err := shared.InitDB(); err != nil {
 		log.Printf("Database initialization failed: %v", err)
-		http.Error(w, "Database initialization failed", http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Database initialization failed"})
 		return
 	}
 
-	var m MovieMark
-	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	var mark MovieMark
+	if !readJSON(w, r, &mark) {
 		return
 	}
-
-	query := `
-	INSERT INTO movie_marks (letterboxd_id, title, watched_date, is_a_list)
-	VALUES ($1, $2, $3, $4)
-	ON CONFLICT (letterboxd_id) DO UPDATE 
-	SET is_a_list = EXCLUDED.is_a_list
-	`
-
-	_, err := shared.DB.Exec(query, m.LetterboxdID, m.Title, m.WatchedDate, m.IsAList)
+	if mark.ID <= 0 || !validViewingStatus(mark.Status) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid viewing update"})
+		return
+	}
+	user, _ := shared.UserFromContext(r.Context())
+	result, err := shared.DB.ExecContext(r.Context(), `
+UPDATE viewings
+SET status = $1, updated_at = NOW()
+WHERE id = $2 AND user_id = $3`, mark.Status, mark.ID, user.ID)
 	if err != nil {
-		http.Error(w, "Failed to save mark", http.StatusInternalServerError)
+		log.Printf("Failed to update viewing: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update viewing"})
 		return
 	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Viewing not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "success"})
+}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+func validViewingStatus(status string) bool {
+	switch status {
+	case "unreviewed", "a_list", "not_a_list", "excluded":
+		return true
+	default:
+		return false
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/fuuntz/a-list-tracker/api"
+	"github.com/fuuntz/a-list-tracker/shared"
 )
 
 //go:embed public
@@ -21,12 +22,33 @@ func newHandler() http.Handler {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/api/movies", api.MoviesHandler)
-	mux.HandleFunc("/api/settings", api.SettingsHandler)
-	mux.HandleFunc("/api/mark", api.MarkHandler)
-	mux.Handle("/", http.FileServer(http.FS(publicFS)))
+	mux.Handle("/api/auth/session", http.HandlerFunc(api.SessionHandler))
+	mux.Handle("/api/auth/login", api.ProtectUnsafe(http.HandlerFunc(api.LoginHandler)))
+	mux.Handle("/api/auth/setup", api.ProtectUnsafe(http.HandlerFunc(api.SetupHandler)))
+	mux.Handle("/api/auth/logout", api.ProtectUnsafe(shared.RequireUser(http.HandlerFunc(api.LogoutHandler))))
 
-	return mux
+	mux.Handle("/api/movies", shared.RequireUser(http.HandlerFunc(api.MoviesHandler)))
+	mux.Handle("/api/sync", api.ProtectUnsafe(shared.RequireUser(http.HandlerFunc(api.SyncHandler))))
+	mux.Handle("/api/import/preview", api.ProtectUnsafe(shared.RequireUser(http.HandlerFunc(api.ImportPreviewHandler))))
+	mux.Handle("/api/import/confirm", api.ProtectUnsafe(shared.RequireUser(http.HandlerFunc(api.ImportConfirmHandler))))
+	mux.Handle("/api/export", shared.RequireUser(http.HandlerFunc(api.ExportHandler)))
+	mux.Handle("/api/data/reset", api.ProtectUnsafe(shared.RequireUser(http.HandlerFunc(api.ResetDataHandler))))
+	mux.Handle("/api/settings", api.ProtectUnsafe(shared.RequireUser(http.HandlerFunc(api.SettingsHandler))))
+	mux.Handle("/api/mark", api.ProtectUnsafe(shared.RequireUser(http.HandlerFunc(api.MarkHandler))))
+	fileServer := http.FileServer(http.FS(publicFS))
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/setup" {
+			copy := r.Clone(r.Context())
+			urlCopy := *r.URL
+			urlCopy.Path = "/"
+			copy.URL = &urlCopy
+			fileServer.ServeHTTP(w, copy)
+			return
+		}
+		fileServer.ServeHTTP(w, r)
+	}))
+
+	return api.SecurityHeaders(mux)
 }
 
 func main() {
