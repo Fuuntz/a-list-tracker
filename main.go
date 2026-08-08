@@ -1,6 +1,8 @@
 package main
 
 import (
+	"embed"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -8,15 +10,26 @@ import (
 	"github.com/fuuntz/a-list-tracker/api"
 )
 
-func main() {
-	// Serve static files from the public directory
-	fs := http.FileServer(http.Dir("public"))
-	http.Handle("/", fs)
+//go:embed public
+var publicFiles embed.FS
 
-	// API endpoints
-	http.HandleFunc("/api/movies", api.MoviesHandler)
-	http.HandleFunc("/api/settings", api.SettingsHandler)
-	http.HandleFunc("/api/mark", api.MarkHandler)
+func newHandler() http.Handler {
+	publicFS, err := fs.Sub(publicFiles, "public")
+	if err != nil {
+		panic("failed to load embedded public files: " + err.Error())
+	}
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/api/movies", api.MoviesHandler)
+	mux.HandleFunc("/api/settings", api.SettingsHandler)
+	mux.HandleFunc("/api/mark", api.MarkHandler)
+	mux.Handle("/", http.FileServer(http.FS(publicFS)))
+
+	return mux
+}
+
+func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -24,7 +37,7 @@ func main() {
 	}
 
 	log.Printf("Server listening on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	if err := http.ListenAndServe(":"+port, newHandler()); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
