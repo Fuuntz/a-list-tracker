@@ -6,20 +6,31 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-var DB *sql.DB
+var (
+	DB   *sql.DB
+	dbMu sync.Mutex
+)
 
 func InitDB() error {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
 	if DB != nil {
 		return nil
 	}
 
 	connStr := os.Getenv("POSTGRES_URL")
 	if connStr == "" {
-		return fmt.Errorf("POSTGRES_URL environment variable is not set")
+		connStr = os.Getenv("DATABASE_URL")
+	}
+	if connStr == "" {
+		return fmt.Errorf("POSTGRES_URL or DATABASE_URL environment variable is not set")
 	}
 
 	db, err := sql.Open("pgx", connStr)
@@ -27,10 +38,20 @@ func InitDB() error {
 		return err
 	}
 
-	DB = db
+	db.SetMaxOpenConns(5)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 
-	// Initialize schema
-	return createSchema(context.Background(), db)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := createSchema(ctx, db); err != nil {
+		db.Close()
+		return fmt.Errorf("initialize database schema: %w", err)
+	}
+
+	DB = db
+	return nil
 }
 
 func createSchema(ctx context.Context, db *sql.DB) error {

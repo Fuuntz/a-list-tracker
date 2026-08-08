@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -22,6 +23,7 @@ func MarkHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := shared.InitDB(); err != nil {
+		log.Printf("Database initialization failed: %v", err)
 		http.Error(w, "Database initialization failed", http.StatusInternalServerError)
 		return
 	}

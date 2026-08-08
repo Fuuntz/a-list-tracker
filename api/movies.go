@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -33,6 +34,8 @@ type MovieResponse struct {
 	Status      string    `json:"status"` // "A-List", "Not A-List", "Unmarked"
 }
 
+var letterboxdClient = &http.Client{Timeout: 10 * time.Second}
+
 func MoviesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -40,6 +43,7 @@ func MoviesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := shared.InitDB(); err != nil {
+		log.Printf("Database initialization failed: %v", err)
 		http.Error(w, "Database initialization failed", http.StatusInternalServerError)
 		return
 	}
@@ -54,15 +58,22 @@ func MoviesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rssURL := fmt.Sprintf("https://letterboxd.com/%s/rss/", username)
-	resp, err := http.Get(rssURL)
+	resp, err := letterboxdClient.Get(rssURL)
 	if err != nil {
+		log.Printf("Failed to fetch Letterboxd RSS feed: %v", err)
 		http.Error(w, "Failed to fetch RSS feed", http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Letterboxd RSS feed returned %s", resp.Status)
+		http.Error(w, "Letterboxd RSS feed returned an error", http.StatusBadGateway)
+		return
+	}
 
 	var feed RSS
 	if err := xml.NewDecoder(resp.Body).Decode(&feed); err != nil {
+		log.Printf("Failed to parse Letterboxd RSS feed: %v", err)
 		http.Error(w, "Failed to parse RSS feed", http.StatusInternalServerError)
 		return
 	}

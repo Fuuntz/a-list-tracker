@@ -17,6 +17,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMovies = [];
     let settings = { username: '', monthlyCost: 30.00 };
 
+    async function requireSuccess(res) {
+        if (res.ok) return res;
+
+        const message = (await res.text()).trim();
+        throw new Error(message || `Request failed with status ${res.status}`);
+    }
+
     // Initialization
     async function init() {
         await loadSettings();
@@ -31,12 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadSettings() {
         try {
             const res = await fetch('/api/settings');
-            if (res.ok) {
-                const data = await res.json();
-                settings = data;
-                document.getElementById('username').value = data.username || '';
-                document.getElementById('monthlyCost').value = data.monthlyCost || 30.00;
-            }
+            await requireSuccess(res);
+            const data = await res.json();
+            settings = data;
+            document.getElementById('username').value = data.username || '';
+            document.getElementById('monthlyCost').value = data.monthlyCost || 30.00;
         } catch (e) {
             console.error('Failed to load settings', e);
         }
@@ -49,16 +55,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showLoading();
         try {
-            await fetch('/api/settings', {
+            const res = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, monthlyCost })
             });
+            await requireSuccess(res);
             settings = { username, monthlyCost };
             settingsModal.classList.remove('active');
             await fetchMovies();
         } catch (error) {
-            alert('Failed to save settings');
+            console.error('Failed to save settings', error);
+            alert(`Failed to save settings: ${error.message}`);
         } finally {
             hideLoading();
         }
@@ -68,12 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading();
         try {
             const res = await fetch('/api/movies');
-            if (res.ok) {
-                currentMovies = await res.json();
-                renderUI();
-            }
+            await requireSuccess(res);
+            currentMovies = await res.json();
+            renderUI();
         } catch (error) {
             console.error('Failed to fetch movies', error);
+            alert(`Failed to fetch movies: ${error.message}`);
         } finally {
             hideLoading();
         }
@@ -82,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function markMovie(movie, isAList) {
         showLoading();
         try {
-            await fetch('/api/mark', {
+            const res = await fetch('/api/mark', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -92,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     isAList: isAList
                 })
             });
+            await requireSuccess(res);
             // Update local state
             const m = currentMovies.find(x => x.id === movie.id);
             if (m) {
@@ -100,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderUI();
         } catch (error) {
             console.error('Failed to mark movie', error);
-            alert('Failed to save mark');
+            alert(`Failed to save mark: ${error.message}`);
         } finally {
             hideLoading();
         }

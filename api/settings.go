@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/fuuntz/a-list-tracker/shared"
@@ -14,6 +15,7 @@ type Settings struct {
 
 func SettingsHandler(w http.ResponseWriter, r *http.Request) {
 	if err := shared.InitDB(); err != nil {
+		log.Printf("Database initialization failed: %v", err)
 		http.Error(w, "Database initialization failed", http.StatusInternalServerError)
 		return
 	}
