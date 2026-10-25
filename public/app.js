@@ -96,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading();
         try {
             await Promise.all([loadSettings(), loadMovies()]);
+            renderUI();
             if (!settings.username) openSettings();
         } catch (error) {
             showAppMessage(error.message, true);
@@ -233,7 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadMovies() {
         currentMovies = await api('/api/movies');
-        renderUI();
     }
 
     async function syncMovies() {
@@ -242,6 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await api('/api/sync', { method: 'POST' });
             await loadMovies();
+            renderUI();
             elements.syncStatus.textContent = `${result.processed} feed entries checked`;
         } catch (error) {
             showAppMessage(error.message, true);
@@ -332,6 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.importForm.reset();
             elements.importPreview.classList.add('hidden');
             await loadMovies();
+            renderUI();
             showAppMessage(`Imported ${result.imported} viewing${result.imported === 1 ? '' : 's'}`);
             switchView('history');
         } catch (error) {
